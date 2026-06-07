@@ -11,6 +11,7 @@ export interface Agent {
   alive: boolean;
   color: string;
   current_action: string;
+  gender: string;
 }
 
 export interface Resource {
@@ -31,4 +32,5 @@ export interface DetailedAgent extends Agent {
   generation: number;
   memories: Array<{ type: string; x: number; y: number; strength: number }>;
   goals: Array<{ name: string; priority: number }>;
+  _births: string[];
 }

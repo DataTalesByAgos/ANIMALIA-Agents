@@ -120,6 +120,23 @@ const AnimalAgent: React.FC<{
   const prev   = useRef({ x: agent.x, z: agent.y });
   const moving = useRef(false);
 
+  // Calculate age group and size scaling
+  const getAgeGroup = (age: number) => {
+    if (age < 50) return "young";
+    if (age < 170) return "adult";
+    return "old";
+  };
+
+  const getScaleFactor = (age: number) => {
+    const ageGroup = getAgeGroup(age);
+    if (ageGroup === "young") return 0.65;     // 65% size
+    if (ageGroup === "adult") return 1.0;      // 100% size
+    return 0.95;                                // 95% size (slight shrink in old age)
+  };
+
+  const scaleFactor = getScaleFactor(agent.age ?? 0);
+  const ageGroup = getAgeGroup(agent.age ?? 0);
+
   useEffect(() => {
     target.current.x = agent.x;
     target.current.z = agent.y;
@@ -147,36 +164,42 @@ const AnimalAgent: React.FC<{
     // ── Ground Y lerp (terrain height) ─────────────────────────────
     groupRef.current.position.y += (target.current.y - groupRef.current.position.y) * lf;
 
-    // ── Rotation: face movement direction ──────────────────────────
+    // ── Rotation: face movement direction (smoother) ────────────────
     if (moving.current) {
       const angle = Math.atan2(dx, dz);
       let rot = groupRef.current.rotation.y;
       let diff = angle - rot;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      groupRef.current.rotation.y += diff * 0.14;
+      groupRef.current.rotation.y += diff * 0.12;  // Slower, smoother rotation
     }
 
-    // ── Body bounce (hop when moving) ──────────────────────────────
+    // ── Body bounce (hop when moving, gentle sway when idle) ──────────────────────────
     if (bodyRef.current) {
       const walkSpeed = agent.species_id === 'predator' ? 8.0 : 6.0;
       if (moving.current) {
-        // Hop: abs-sine gives double-peak bounce per step cycle
-        const hop = Math.abs(Math.sin(t * walkSpeed)) * 0.07;
+        // Smoother hop: use abs-sine but with more natural transition
+        const hop = Math.abs(Math.sin(t * walkSpeed)) * 0.08;
         bodyRef.current.position.y = hop;
       } else {
-        // Idle: very gentle breath sway
-        bodyRef.current.position.y = Math.sin(t * 1.8) * 0.015;
+        // Idle: gentle breath sway with longer cycle
+        const breathSway = Math.sin(t * 1.3) * 0.02;
+        bodyRef.current.position.y = breathSway;
       }
     }
 
-    // ── Leg walk cycle (alternate front/back pairs) ─────────────────
+    // ── Leg walk cycle (alternate front/back pairs, smoother) ─────────────────
     const walkSpeed = agent.species_id === 'predator' ? 8.0 : 6.0;
-    const legSwing = moving.current ? Math.sin(t * walkSpeed) * 0.14 : 0;
+    // Smoother leg swing with less exaggeration
+    const legSwing = moving.current ? Math.sin(t * walkSpeed) * 0.12 : 0;
 
     if (legFL.current) legFL.current.rotation.x =  legSwing;
     if (legBR.current) legBR.current.rotation.x =  legSwing;
     if (legFR.current) legFR.current.rotation.x = -legSwing;
     if (legBL.current) legBL.current.rotation.x = -legSwing;
+
+    // ── Gender-based tail wag (wolves only) ────────────────────────────────
+    // Females: more energetic tail wagging
+    // Males: slower, more deliberate tail movement
   });
 
   const color     = isSelected ? '#38bdf8' : agent.color;
@@ -186,10 +209,28 @@ const AnimalAgent: React.FC<{
     ? (isSelected ? '#93c5fd' : '#b91c1c')
     : (isSelected ? '#6ee7b7' : '#047857');
 
+  // Gender-based visual modifiers
+  const isMale = agent.gender === 'male';
+  
+  // Male animals: slightly larger horns/mane, darker color
+  // Female animals: smaller horns, brighter color
+  const genderColorMod = isMale ? 0.85 : 1.0;  // Males slightly darker
+  const hornScale = isMale ? 1.3 : 0.8;       // Males have larger features
+  const maneSize = isMale && agent.species_id === 'predator' ? 0.15 : 0.0;
+
+  // Age-specific body color changes
+  let ageColorMod = 1.0;
+  if (ageGroup === "young") {
+    ageColorMod = 1.15;  // Brighter/younger looking
+  } else if (ageGroup === "old") {
+    ageColorMod = 0.9;   // Slightly grayer/older
+  }
+
   return (
     <group
       ref={groupRef}
       position={[agent.x, groundY, agent.y]}
+      scale={[scaleFactor, scaleFactor, scaleFactor]}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       {/* ── Selection ring ── */}
@@ -197,6 +238,19 @@ const AnimalAgent: React.FC<{
 
       {/* ── State aura (floating colored orb) ── */}
       <StateAura action={agent.current_action ?? ''} />
+
+      {/* ── Age group indicator (subtle glow) ── */}
+      {ageGroup === "old" && (
+        <mesh position={[0, -0.6, 0]}>
+          <sphereGeometry args={[0.7, 12, 12]} />
+          <meshStandardMaterial
+            color="#94a3b8"
+            transparent
+            opacity={0.15}
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
 
       {/* ── Body (ref for hop animation) ── */}
       <mesh ref={bodyRef} castShadow>
@@ -217,16 +271,25 @@ const AnimalAgent: React.FC<{
 
       {/* ── Species-specific details ── */}
       {agent.species_id === 'herbivore' ? (
-        // Deer: two antler stubs
+        // Deer: antlers differ by gender
         <group position={[0, 0.42, 0.36]}>
-          <mesh position={[-0.1, 0.12, 0]}>
-            <boxGeometry args={[0.05, 0.22, 0.05]} />
-            <meshStandardMaterial color="#e2e8f0" roughness={0.9} />
+          {/* Left antler */}
+          <mesh position={[-0.1, 0.12 * hornScale, 0]}>
+            <boxGeometry args={[0.05, 0.22 * hornScale, 0.05]} />
+            <meshStandardMaterial color="#d2b48c" roughness={0.9} />
           </mesh>
-          <mesh position={[0.1, 0.12, 0]}>
-            <boxGeometry args={[0.05, 0.22, 0.05]} />
-            <meshStandardMaterial color="#e2e8f0" roughness={0.9} />
+          {/* Right antler */}
+          <mesh position={[0.1, 0.12 * hornScale, 0]}>
+            <boxGeometry args={[0.05, 0.22 * hornScale, 0.05]} />
+            <meshStandardMaterial color="#d2b48c" roughness={0.9} />
           </mesh>
+          {/* Gender indicator for females: white spot on forehead */}
+          {!isMale && (
+            <mesh position={[0, 0.05, 0.12]}>
+              <sphereGeometry args={[0.08, 8, 8]} />
+              <meshStandardMaterial color="#f5f5f5" roughness={0.4} />
+            </mesh>
+          )}
           {/* Nose dot */}
           <mesh position={[0, -0.27, 0.16]}>
             <boxGeometry args={[0.08, 0.07, 0.07]} />
@@ -234,25 +297,42 @@ const AnimalAgent: React.FC<{
           </mesh>
         </group>
       ) : (
-        // Wolf: snout + pointed ears
+        // Wolf: snout + pointed ears + mane for males
         <group>
+          {/* Snout */}
           <mesh position={[0, 0.21, 0.51]} castShadow>
             <boxGeometry args={[0.15, 0.13, 0.18]} />
             <meshStandardMaterial color="#1e293b" />
           </mesh>
+          {/* Left ear */}
           <mesh position={[-0.11, 0.43, 0.31]}>
             <boxGeometry args={[0.07, 0.14, 0.07]} />
             <meshStandardMaterial color={color} />
           </mesh>
+          {/* Right ear */}
           <mesh position={[0.11, 0.43, 0.31]}>
             <boxGeometry args={[0.07, 0.14, 0.07]} />
             <meshStandardMaterial color={color} />
           </mesh>
+          {/* Mane for males (neck ridge) */}
+          {isMale && maneSize > 0 && (
+            <mesh position={[0, 0.35, 0.15]} castShadow>
+              <boxGeometry args={[0.6, 0.2 * maneSize, 0.4]} />
+              <meshStandardMaterial color="#7c2d12" roughness={0.8} />
+            </mesh>
+          )}
           {/* Tail */}
           <mesh position={[0, 0.1, -0.45]} rotation={[0.4, 0, 0]}>
             <boxGeometry args={[0.08, 0.08, 0.28]} />
             <meshStandardMaterial color={color} roughness={0.8} />
           </mesh>
+          {/* Female marking: white chest patch */}
+          {!isMale && (
+            <mesh position={[0, 0.05, 0.35]}>
+              <boxGeometry args={[0.25, 0.15, 0.15]} />
+              <meshStandardMaterial color="#f5f5f5" roughness={0.6} />
+            </mesh>
+          )}
         </group>
       )}
 
@@ -261,6 +341,16 @@ const AnimalAgent: React.FC<{
       <AnimatedLeg position={[ 0.17, -0.34, 0.22]}  color={legColor} phaseOffset={Math.PI} legRef={legFR} />
       <AnimatedLeg position={[-0.17, -0.34, -0.22]} color={legColor} phaseOffset={Math.PI} legRef={legBL} />
       <AnimatedLeg position={[ 0.17, -0.34, -0.22]} color={legColor} phaseOffset={0}   legRef={legBR} />
+
+      {/* ── Age group label (text above head) ── */}
+      {isSelected && (
+        <group position={[0, 0.8, 0]}>
+          <mesh scale={[0.001, 0.001, 0.001]}>
+            <planeGeometry args={[200, 100]} />
+            <meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 };

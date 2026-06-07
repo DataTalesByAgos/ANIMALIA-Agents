@@ -134,7 +134,8 @@ def get_state():
                     "thirst": round(a.thirst, 1),
                     "alive": a.alive,
                     "color": a.color,
-                    "current_action": a.current_action
+                    "current_action": a.current_action,
+                    "gender": a.gender
                 } for a in state.agents if a.alive
             ],
             "resources": [
@@ -182,6 +183,8 @@ def get_agent_details(agent_id: str):
             "generation": agent.generation,
             "alive": agent.alive,
             "current_action": agent.current_action,
+            "gender": agent.gender,
+            "_births": agent._births,
             "memories": agent.memories,
             "goals": [
                 {"name": "Stay Alive", "priority": 1.0},

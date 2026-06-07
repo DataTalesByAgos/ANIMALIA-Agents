@@ -19,7 +19,7 @@ import math
 WANDER_PERSISTENCE = 8   # ticks before direction changes
 
 class Agent:
-    def __init__(self, agent_id: str, species_id: str, name: str, x: float, y: float, generation: int = 1):
+    def __init__(self, agent_id: str, species_id: str, name: str, x: float, y: float, generation: int = 1, gender: str = None):
         self.id = agent_id or str(uuid.uuid4())[:8]
         self.species_id = species_id  # 'herbivore' or 'predator'
         self.name = name
@@ -32,6 +32,8 @@ class Agent:
         self.generation = generation
         self.alive = True
         self.current_action = "idle"
+        self.gender = gender or random.choice(["male", "female"])  # Random gender at birth
+        self._births = []  # List of offspring IDs (for tracking)
 
         # Wander momentum state
         self._wander_angle = random.uniform(0, 2 * math.pi)
@@ -59,6 +61,25 @@ class Agent:
             self.thirst_rate = 0.32
             self.energy_drain = 0.06
             self.max_age = 240.0
+
+    def get_age_group(self) -> str:
+        """Return age category: 'young', 'adult', or 'old'."""
+        if self.age < 50.0:
+            return "young"
+        elif self.age < 170.0:
+            return "adult"
+        else:
+            return "old"
+
+    def can_reproduce(self) -> bool:
+        """Check if this agent can reproduce based on age."""
+        age_group = self.get_age_group()
+        if age_group == "young":
+            return False  # Too young
+        elif age_group == "old":
+            return random.random() < 0.25  # Only 25% chance if old
+        else:
+            return True  # Full chance if adult
 
     # ── Main update ─────────────────────────────────────────────────
     def tick(self, world, other_agents, logs, allow_birth=True):
@@ -106,12 +127,15 @@ class Agent:
 
         # 3. Decision Planner — reactive priority ladder
         if self.species_id == "predator":
-            self._decide_predator(nearby_prey, nearby_resources, world, logs)
+            self._decide_predator(nearby_prey, nearby_resources, world, logs, other_agents, allow_birth)
         else:
             self._decide_herbivore(nearby_predators, nearby_resources, other_agents, world, logs, allow_birth)
 
     # ── Predator AI ─────────────────────────────────────────────────
-    def _decide_predator(self, nearby_prey, nearby_resources, world, logs):
+    def _decide_predator(self, nearby_prey, nearby_resources, world, logs, other_agents=None, allow_birth=True):
+        if other_agents is None:
+            other_agents = []
+            
         # Critical thirst overrides hunting
         if self.thirst > 70.0:
             self.current_action = "🌊 seeking water"
@@ -136,6 +160,47 @@ class Agent:
             self.current_action = "👁 patrolling"
             self._wander(world, persist=True)
             return
+
+        # REPRODUCE — wolves reproduce when content and can
+        if (self.hunger <= 25.0 and self.thirst <= 25.0 and self.energy > 60.0 
+            and allow_birth and self.can_reproduce()):
+            candidates = [
+                a for a in other_agents
+                if a.species_id == "predator" and a.id != self.id
+                and a.alive and a.hunger < 40.0 and a.thirst < 40.0
+                and a.energy > 50.0 and a.can_reproduce()
+                and a.gender != self.gender  # Opposite gender
+            ]
+            if candidates:
+                partner, p_dist = min(
+                    ((a, math.sqrt((self.x - a.x)**2 + (self.y - a.y)**2)) for a in candidates),
+                    key=lambda t: t[1]
+                )
+                if p_dist < 1.2:
+                    self.current_action = "🐣 reproducing"
+                    # Cost of reproduction for both parents
+                    self.energy  -= 35.0
+                    partner.energy -= 35.0
+                    child_x = self.x + random.uniform(-1.5, 1.5)
+                    child_y = self.y + random.uniform(-1.5, 1.5)
+                    child = Agent(
+                        None, "predator",
+                        f"Wolf-{random.randint(100, 999)}",
+                        max(0.5, min(float(world.width - 1.5),  child_x)),
+                        max(0.5, min(float(world.height - 1.5), child_y)),
+                        self.generation + 1
+                    )
+                    # Newborns start with good vitals
+                    child.energy = 85.0
+                    other_agents.append(child)
+                    self._births.append(child.id)
+                    partner._births.append(child.id)
+                    logs.append(f"🐺 Wolf {self.name} & {partner.name} → born {child.name}")
+                    return
+                else:
+                    self.current_action = "💕 seeking mate"
+                    self._move_towards(partner.x, partner.y)
+                    return
 
         self.current_action = "💤 resting"
         # Stay still when content — energy trickle recover
@@ -171,12 +236,13 @@ class Agent:
             return
 
         # REPRODUCE — only when content and population allows
-        if self.hunger <= 25.0 and self.thirst <= 25.0 and self.energy > 60.0 and allow_birth:
+        if self.hunger <= 25.0 and self.thirst <= 25.0 and self.energy > 60.0 and allow_birth and self.can_reproduce():
             candidates = [
                 a for a in other_agents
                 if a.species_id == "herbivore" and a.id != self.id
                 and a.alive and a.hunger < 40.0 and a.thirst < 40.0
-                and a.energy > 50.0
+                and a.energy > 50.0 and a.can_reproduce()
+                and a.gender != self.gender  # Opposite gender
             ]
             if candidates:
                 partner, p_dist = min(
@@ -200,7 +266,9 @@ class Agent:
                     # Newborns start small / young
                     child.energy = 80.0
                     other_agents.append(child)
-                    logs.append(f"🐣 {self.name} & {partner.name} → born {child.name}")
+                    self._births.append(child.id)
+                    partner._births.append(child.id)
+                    logs.append(f"🐣 {self.name} ({self.gender}) & {partner.name} ({partner.gender}) → born {child.name} ({child.gender})")
                     return
                 else:
                     self.current_action = "💕 seeking mate"
