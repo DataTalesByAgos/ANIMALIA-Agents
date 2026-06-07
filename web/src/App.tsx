@@ -1,11 +1,93 @@
 import React, { useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { 
-  Play, Pause, RotateCcw, Activity, Users, Layers, Shield, Compass, BrainCircuit, Heart, Droplet, Clock
-} from 'lucide-react';
 import { useStore } from './store';
 import { SimulationCanvas } from './SimulationCanvas';
+
+// Voxel Icon Components (Pixel Art SVGs)
+const PlayIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 fill-current">
+    <rect x="2" y="2" width="3" height="12" fill="currentColor"/>
+    <rect x="6" y="4" width="3" height="8" fill="currentColor"/>
+    <rect x="10" y="6" width="3" height="4" fill="currentColor"/>
+  </svg>
+);
+
+const PauseIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 fill-current">
+    <rect x="2" y="2" width="3" height="12" fill="currentColor"/>
+    <rect x="11" y="2" width="3" height="12" fill="currentColor"/>
+  </svg>
+);
+
+const ResetIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 stroke-current fill-none" strokeWidth="1.5">
+    <path d="M13 3c1.5 2 1.5 5 0 7s-5 2-7 0m2-5l-2 2l2 2"/>
+  </svg>
+);
+
+const ClockIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 stroke-current fill-none" strokeWidth="1.5">
+    <rect x="2" y="2" width="12" height="12" rx="1"/>
+    <line x1="8" y1="4" x2="8" y2="8"/>
+    <line x1="8" y1="8" x2="11" y2="8"/>
+  </svg>
+);
+
+const PeopleIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 fill-current">
+    <rect x="2" y="1" width="3" height="3" fill="currentColor"/>
+    <rect x="2" y="5" width="3" height="7" fill="currentColor"/>
+    <rect x="11" y="1" width="3" height="3" fill="currentColor"/>
+    <rect x="11" y="5" width="3" height="7" fill="currentColor"/>
+  </svg>
+);
+
+const SpeedIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4 fill-current">
+    <rect x="2" y="6" width="12" height="4" fill="currentColor"/>
+    <rect x="8" y="4" width="2" height="8" fill="currentColor"/>
+  </svg>
+);
+
+const BrainIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-5 h-5 fill-current">
+    <circle cx="4" cy="4" r="2" fill="currentColor"/>
+    <circle cx="12" cy="4" r="2" fill="currentColor"/>
+    <circle cx="8" cy="10" r="2" fill="currentColor"/>
+    <line x1="4" y1="6" x2="8" y2="10" stroke="currentColor" strokeWidth="1"/>
+    <line x1="12" y1="6" x2="8" y2="10" stroke="currentColor" strokeWidth="1"/>
+  </svg>
+);
+
+const HeartIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+    <rect x="4" y="4" width="2" height="2" fill="currentColor"/>
+    <rect x="10" y="4" width="2" height="2" fill="currentColor"/>
+    <rect x="5" y="6" width="6" height="6" fill="currentColor"/>
+  </svg>
+);
+
+const WaterIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+    <rect x="6" y="2" width="4" height="12" fill="currentColor"/>
+    <line x1="6" y1="6" x2="10" y2="6" stroke="currentColor" strokeWidth="1.5"/>
+  </svg>
+);
+
+const FoodIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+    <rect x="3" y="3" width="10" height="10" fill="currentColor"/>
+    <rect x="5" y="5" width="6" height="6" fill="#0a0e1a"/>
+  </svg>
+);
+
+const CompassIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
+    <rect x="6" y="2" width="4" height="12" fill="currentColor"/>
+    <rect x="2" y="6" width="12" height="4" fill="currentColor"/>
+  </svg>
+);
 
 const App: React.FC = () => {
   const {
@@ -45,69 +127,68 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#070a13] text-slate-100 selection:bg-cyan-500/30">
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-[#1a1a1a] text-[#e8e8e8] selection:bg-[#7fb069]/30">
       
-      {/* Top Header Bar */}
-      <header className="h-16 flex items-center justify-between px-6 border-b border-slate-800/80 bg-slate-950/40 backdrop-blur-md z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-tr from-emerald-500 to-cyan-500 rounded-lg shadow-lg shadow-emerald-500/20">
-            <Activity className="w-6 h-6 text-slate-950 stroke-[2.5]" />
+      {/* Top Header Bar - Voxel Style */}
+      <header className="h-20 flex items-center justify-between px-6 border-b-4 border-[#7fb069] bg-[#2a2a2a] shadow-lg" style={{boxShadow: '0 4px 0 #5a5a5a'}}>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-gradient-to-br from-[#7fb069] to-[#a0714f] border-2 border-[#e8e8e8] shadow-lg" style={{boxShadow: '4px 4px 0 rgba(0,0,0,0.5)'}}>
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-[#1a1a1a]">
+              <rect x="4" y="4" width="16" height="16" fill="currentColor"/>
+              <rect x="6" y="6" width="12" height="12" fill="#1a1a1a"/>
+            </svg>
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-wide font-sans bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
-              ANIMALIA AGENTS
+            <h1 className="text-xl font-bold tracking-wider text-[#7fb069]" style={{fontFamily: "'Press Start 2P', cursive", textShadow: '0 0 10px rgba(127, 176, 105, 0.3)'}}>
+              ANIMALIA
             </h1>
-            <p className="text-[10px] text-slate-400 tracking-wider uppercase font-semibold">Multi-Agent AI Lab</p>
+            <p className="text-sm text-[#c9b88d] tracking-widest uppercase font-bold">:: ECOSYSTEM SIM ::</p>
           </div>
         </div>
 
         {/* Telemetry Stats */}
-        <div className="flex items-center gap-8 text-sm">
+        <div className="flex items-center gap-6 text-base border-l-2 border-r-2 border-[#a0714f] px-6 py-2" style={{boxShadow: 'inset 0 0 10px rgba(160, 113, 79, 0.1)'}}>
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-cyan-400" />
-            <span className="text-slate-400">Tick:</span>
-            <span className="font-mono font-bold text-slate-100">{tick}</span>
+            <ClockIcon />
+            <span className="text-[#c9b88d] font-bold text-sm">TICK</span>
+            <span className="font-mono text-[#e8e8e8] font-bold text-lg">{tick}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-400">Population:</span>
-            <span className="font-mono font-bold text-slate-100">{agentCount}</span>
+            <PeopleIcon />
+            <span className="text-[#c9b88d] font-bold text-sm">AGENTS</span>
+            <span className="font-mono text-[#e8e8e8] font-bold text-lg">{agentCount}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-yellow-400" />
-            <span className="text-slate-400">Speed:</span>
-            <span className="font-mono font-bold text-slate-100">{speed}x</span>
+            <SpeedIcon />
+            <span className="text-[#c9b88d] font-bold text-sm">SPEED</span>
+            <span className="font-mono text-[#e8e8e8] font-bold text-lg">{speed}x</span>
           </div>
         </div>
 
         {/* Playback Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={togglePlay}
-            className={`p-2.5 rounded-lg flex items-center justify-center transition-all ${
-              running 
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20' 
-                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20'
-            }`}
+            className="voxel-btn border-[#a0714f] bg-[#2a2a2a] text-[#a0714f] hover:text-[#e8e8e8]"
           >
-            {running ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+            {running ? <PauseIcon /> : <PlayIcon />}
           </button>
           <button 
             onClick={handleReset}
-            className="p-2.5 rounded-lg bg-slate-800/40 text-slate-300 border border-slate-700/50 hover:bg-slate-700/50 transition-all"
+            className="voxel-btn border-[#7fb069] bg-[#2a2a2a] text-[#7fb069] hover:text-[#e8e8e8]"
             title="Reset with a new procedural seed"
           >
-            <RotateCcw className="w-4 h-4" />
+            <ResetIcon />
           </button>
-          <div className="flex rounded-lg border border-slate-700/50 overflow-hidden bg-slate-900/40">
+          <div className="flex border-2 border-[#c9b88d] overflow-hidden bg-[#1a1a1a]">
             {[1, 2, 4, 8].map((s) => (
               <button
                 key={s}
                 onClick={() => setSpeedFactor(s)}
-                className={`px-3 py-1.5 text-xs font-mono font-bold transition-all ${
+                className={`px-4 py-2 text-sm font-mono font-bold transition-all border-r border-[#c9b88d] last:border-0 ${
                   speed === s 
-                    ? 'bg-cyan-500/20 text-cyan-400 border-r border-slate-700/50' 
-                    : 'text-slate-400 hover:text-slate-200 border-r border-slate-700/50 last:border-0'
+                    ? 'bg-[#c9b88d] text-[#1a1a1a]' 
+                    : 'bg-[#2a2a2a] text-[#c9b88d] hover:bg-[#3a3a3a]'
                 }`}
               >
                 {s}x
@@ -118,107 +199,107 @@ const App: React.FC = () => {
       </header>
 
       {/* Main Workspace Panels */}
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 flex relative overflow-hidden gap-3 p-3" style={{background: 'linear-gradient(135deg, #1a1a1a 0%, #2a1a2a 100%)'}}>
         
         {/* LEFT PANEL: Selected Agent Inspector */}
-        <aside className="w-80 glass-panel m-4 rounded-xl flex flex-col overflow-hidden z-10">
-          <div className="p-4 border-b border-slate-800/80 bg-slate-950/20 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="w-5 h-5 text-cyan-400" />
-              <h2 className="font-semibold tracking-wide">Agent Inspector</h2>
+        <aside className="w-80 glass-panel flex flex-col overflow-hidden z-10" style={{border: '3px solid #7fb069', boxShadow: '0 0 20px rgba(127, 176, 105, 0.2), 6px 6px 0 rgba(90, 90, 90, 0.3)'}}>
+          <div className="p-4 border-b-2 border-[#a0714f] bg-[#2a2a2a] flex items-center justify-between" style={{boxShadow: 'inset 0 0 10px rgba(160, 113, 79, 0.1)'}}>
+            <div className="flex items-center gap-3">
+              <BrainIcon className="text-[#7fb069]" />
+              <h2 className="font-bold tracking-widest text-[#e8e8e8] text-base" style={{fontFamily: "'VT323', monospace"}}>AGENT DATA</h2>
             </div>
             {selectedAgentId && (
               <button 
                 onClick={() => selectAgent(null)}
-                className="text-xs text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded bg-slate-800/50 border border-slate-700/30"
+                className="text-sm text-[#e8e8e8] hover:text-[#7fb069] px-3 py-1 border-2 border-[#c9b88d] bg-[#1a1a1a] font-bold"
               >
-                Clear
+                CLEAR
               </button>
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
             {selectedAgentDetails ? (
               <>
-                <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-lg border border-slate-800/50">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedAgentDetails.color }} />
+                <div className="flex items-center gap-3 bg-[#1a1a1a] p-3 border-2 border-[#a0714f]" style={{boxShadow: 'inset 0 0 10px rgba(160, 113, 79, 0.1)'}}>
+                  <div className="w-4 h-4 border border-current" style={{ backgroundColor: selectedAgentDetails.color }} />
                   <div>
-                    <div className="font-bold text-slate-100 text-sm">{selectedAgentDetails.name}</div>
-                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
-                      Gen {selectedAgentDetails.generation} • {selectedAgentDetails.species_id}
+                    <div className="font-bold text-[#e8e8e8] text-base" style={{fontFamily: "'VT323', monospace"}}>{selectedAgentDetails.name}</div>
+                    <div className="text-[11px] text-[#c9b88d] font-bold uppercase tracking-widest">
+                      GEN {selectedAgentDetails.generation} | {selectedAgentDetails.species_id}
                     </div>
                   </div>
                 </div>
 
                 {/* Vitals */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vitals</h3>
+                <div className="space-y-3 p-3 border-2 border-[#7fb069] bg-[#1a1a1a]" style={{boxShadow: 'inset 0 0 10px rgba(127, 176, 105, 0.1)'}}>
+                  <h3 className="text-sm font-bold text-[#e8e8e8] uppercase tracking-wider">VITALS</h3>
                   <div className="space-y-2">
                     <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-rose-500" /> Energy</span>
-                        <span className="font-mono">{selectedAgentDetails.energy}%</span>
+                      <div className="flex justify-between text-sm mb-1 font-bold">
+                        <span className="text-[#e8e8e8]">HEALTH</span>
+                        <span className="font-mono text-[#d94d4d]">{selectedAgentDetails.energy}%</span>
                       </div>
-                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div className="bg-rose-500 h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.energy}%` }} />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="flex items-center gap-1"><Compass className="w-3.5 h-3.5 text-amber-500" /> Hunger</span>
-                        <span className="font-mono">{selectedAgentDetails.hunger}%</span>
-                      </div>
-                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div className="bg-amber-500 h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.hunger}%` }} />
+                      <div className="w-full bg-[#2a2a2a] border border-[#c9b88d] h-2 overflow-hidden">
+                        <div className="bg-[#d94d4d] h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.energy}%` }} />
                       </div>
                     </div>
                     <div>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-blue-500" /> Thirst</span>
-                        <span className="font-mono">{selectedAgentDetails.thirst}%</span>
+                      <div className="flex justify-between text-sm mb-1 font-bold">
+                        <span className="text-[#e8e8e8]">HUNGER</span>
+                        <span className="font-mono text-[#d4a574]">{selectedAgentDetails.hunger}%</span>
                       </div>
-                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.thirst}%` }} />
+                      <div className="w-full bg-[#2a2a2a] border border-[#c9b88d] h-2 overflow-hidden">
+                        <div className="bg-[#d4a574] h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.hunger}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1 font-bold">
+                        <span className="text-[#e8e8e8]">THIRST</span>
+                        <span className="font-mono text-[#4fa3d1]">{selectedAgentDetails.thirst}%</span>
+                      </div>
+                      <div className="w-full bg-[#2a2a2a] border border-[#c9b88d] h-2 overflow-hidden">
+                        <div className="bg-[#4fa3d1] h-full transition-all duration-300" style={{ width: `${selectedAgentDetails.thirst}%` }} />
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Goals */}
-                <div className="space-y-2.5">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Goal Stack (GOAP-Ready)</h3>
-                  <div className="space-y-1.5">
+                <div className="space-y-2 p-3 border-2 border-[#a0714f] bg-[#1a1a1a]" style={{boxShadow: 'inset 0 0 10px rgba(160, 113, 79, 0.1)'}}>
+                  <h3 className="text-sm font-bold text-[#e8e8e8] uppercase tracking-wider">GOALS</h3>
+                  <div className="space-y-1">
                     {selectedAgentDetails.goals.map((g, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs p-2 rounded bg-slate-900/30 border border-slate-800/50">
-                        <span className="text-slate-300">{g.name}</span>
-                        <span className="font-mono text-cyan-400 font-semibold">Priority {g.priority}</span>
+                      <div key={idx} className="flex justify-between items-center text-sm p-2 bg-[#2a2a2a] border-2 border-[#7fb069] font-bold">
+                        <span className="text-[#e8e8e8]">{g.name}</span>
+                        <span className="font-mono text-[#7fb069]">P:{g.priority}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Action details */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Executing Tool/Action</h3>
-                  <div className="p-3 bg-cyan-950/20 border border-cyan-800/30 rounded-lg text-xs flex items-center justify-between text-cyan-300">
-                    <span className="font-semibold">{selectedAgentDetails.current_action}</span>
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-[10px] uppercase font-bold">In Progress</span>
+                <div className="space-y-2 p-3 border-2 border-[#c9b88d] bg-[#1a1a1a]">
+                  <h3 className="text-sm font-bold text-[#e8e8e8] uppercase tracking-wider">ACTION</h3>
+                  <div className="p-3 bg-[#2a2a2a] border-2 border-[#a0714f] text-sm flex items-center justify-between text-[#e8e8e8] font-bold">
+                    <span className="font-mono">{selectedAgentDetails.current_action}</span>
+                    <span className="px-3 py-1 bg-[#a0714f] text-[#1a1a1a] text-[11px] uppercase font-bold">RUN</span>
                   </div>
                 </div>
 
                 {/* Memories */}
-                <div className="space-y-2.5">
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Local Memories</h3>
+                <div className="space-y-2 p-3 border-2 border-[#7fb069] bg-[#1a1a1a]">
+                  <h3 className="text-sm font-bold text-[#e8e8e8] uppercase tracking-wider">MEMORY</h3>
                   {selectedAgentDetails.memories.length === 0 ? (
-                    <div className="text-xs text-slate-500 italic p-3 text-center bg-slate-900/10 rounded-lg border border-dashed border-slate-800">
-                      No memories yet. Searching surroundings...
+                    <div className="text-sm text-[#c9b88d] italic p-3 text-center bg-[#2a2a2a] border-2 border-dashed border-[#a0714f] font-bold">
+                      SCANNING...
                     </div>
                   ) : (
-                    <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                    <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
                       {selectedAgentDetails.memories.map((m, idx) => (
-                        <div key={idx} className="p-2 bg-slate-900/30 rounded border border-slate-800/50 text-[11px] flex justify-between">
-                          <span className="text-slate-300 capitalize">{m.type} found</span>
-                          <span className="font-mono text-slate-400">({m.x}, {m.y})</span>
+                        <div key={idx} className="p-2 bg-[#2a2a2a] border-2 border-[#a0714f] text-sm flex justify-between font-bold">
+                          <span className="text-[#e8e8e8] capitalize">{m.type}</span>
+                          <span className="font-mono text-[#c9b88d]">({m.x},{m.y})</span>
                         </div>
                       ))}
                     </div>
@@ -226,10 +307,10 @@ const App: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 space-y-3">
-                <BrainCircuit className="w-10 h-10 text-slate-600 stroke-[1.5]" />
-                <p className="text-xs leading-relaxed">
-                  Click on any voxel creature in the 3D map to inspect its real-time perception state, GOAP goals, memory stack, and decisions.
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+                <BrainIcon className="w-12 h-12 text-[#7fb069]" />
+                <p className="text-sm leading-relaxed text-[#c9b88d] font-bold" style={{fontFamily: "'VT323', monospace"}}>
+                  CLICK CREATURE TO SCAN
                 </p>
               </div>
             )}
@@ -237,7 +318,7 @@ const App: React.FC = () => {
         </aside>
 
         {/* 3D CANVAS VIEW */}
-        <main className="flex-1 h-full relative">
+        <main className="flex-1 h-full relative bg-[#1a1a1a] border-2 border-[#a0714f]" style={{boxShadow: 'inset 0 0 20px rgba(160, 113, 79, 0.1)'}}>
           <Canvas
             shadows
             camera={{ position: [15, 18, 22], fov: 40 }}
@@ -276,54 +357,57 @@ const App: React.FC = () => {
           </Canvas>
 
           {/* Controls hint */}
-          <div className="absolute top-4 right-4 pointer-events-none bg-slate-950/65 backdrop-blur px-3 py-2 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
-            <Compass className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Right-click &amp; Drag to Orbit | Scroll to Zoom</span>
+          <div className="absolute top-4 right-4 pointer-events-none bg-[#2a2a2a] border-2 border-[#c9b88d] px-4 py-3 text-sm text-[#e8e8e8] flex items-center gap-2 font-bold" style={{boxShadow: 'inset 0 0 10px rgba(201, 184, 141, 0.1)'}}>
+            <CompassIcon />
+            <span>RIGHT-CLICK + DRAG | SCROLL</span>
           </div>
 
-          {/* Aura Legend */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none bg-slate-950/70 backdrop-blur px-4 py-2 rounded-xl border border-slate-800 flex items-center gap-4 text-[10px] font-semibold">
-            <span className="text-slate-400 tracking-widest uppercase">Aura</span>
+          {/* Aura Legend - Minecraft Colors */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none bg-[#2a2a2a] border-3 border-[#7fb069] px-4 py-3 flex items-center gap-4 text-[11px] font-bold" style={{boxShadow: '0 0 20px rgba(127, 176, 105, 0.2), 4px 4px 0 rgba(90, 90, 90, 0.3)'}}>
+            <span className="text-[#c9b88d] tracking-widest uppercase">AURA</span>
             {[
-              { color: 'bg-green-400',  label: 'Foraging' },
-              { color: 'bg-sky-400',    label: 'Drinking' },
-              { color: 'bg-orange-400', label: 'Fleeing' },
-              { color: 'bg-red-400',    label: 'Hunting' },
-              { color: 'bg-fuchsia-400',label: 'Mating' },
-              { color: 'bg-lime-400',   label: 'Resting' },
+              { color: '#7fb069', label: 'FORAGE' },
+              { color: '#4fa3d1', label: 'DRINK' },
+              { color: '#d4a574', label: 'FLEE' },
+              { color: '#d94d4d', label: 'HUNT' },
+              { color: '#9b6b3b', label: 'MATE' },
+              { color: '#8fbc8f', label: 'REST' },
             ].map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${color} shadow-sm`} />
-                <span className="text-slate-300">{label}</span>
+              <div key={label} className="flex items-center gap-2">
+                <div className="w-3 h-3 border border-[#c9b88d]" style={{backgroundColor: color}} />
+                <span className="text-[#e8e8e8]">{label}</span>
               </div>
             ))}
           </div>
         </main>
 
         {/* RIGHT PANEL: Live Log Console */}
-        <aside className="w-80 glass-panel m-4 rounded-xl flex flex-col overflow-hidden z-10">
-          <div className="p-4 border-b border-slate-800/80 bg-slate-950/20 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-emerald-400" />
-            <h2 className="font-semibold tracking-wide">Ecosystem Live Log</h2>
+        <aside className="glass-panel flex flex-col overflow-hidden z-10 w-80" style={{border: '3px solid #a0714f', boxShadow: '0 0 20px rgba(160, 113, 79, 0.2), 6px 6px 0 rgba(90, 90, 90, 0.3)'}}>
+          <div className="p-4 border-b-2 border-[#7fb069] bg-[#2a2a2a] flex items-center gap-3" style={{boxShadow: 'inset 0 0 10px rgba(127, 176, 105, 0.1)'}}>
+            <svg viewBox="0 0 16 16" className="w-5 h-5 fill-current text-[#7fb069]">
+              <rect x="2" y="2" width="12" height="12" fill="currentColor"/>
+              <rect x="4" y="4" width="8" height="8" fill="#2a2a2a"/>
+            </svg>
+            <h2 className="font-bold tracking-widest text-[#e8e8e8] text-sm" style={{fontFamily: "'VT323', monospace"}}>ECOSYSTEM</h2>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 font-mono text-[11px] space-y-2 bg-[#090d16]/60">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 font-mono text-sm space-y-2 bg-[#1a1a1a] font-bold">
             {logs.length === 0 ? (
-              <div className="text-slate-600 italic">Console starting...</div>
+              <div className="text-[#c9b88d] italic text-sm">SYSTEM READY...</div>
             ) : (
               logs.map((log, index) => (
                 <div 
                   key={index} 
-                  className={`py-1 border-b border-slate-900/80 last:border-0 ${
+                  className={`py-1 border-b border-[#2a2a2a] last:border-0 ${
                     log.includes('died') 
-                      ? 'text-rose-400' 
+                      ? 'text-[#d94d4d]' 
                       : log.includes('reproduced') 
-                      ? 'text-emerald-400' 
+                      ? 'text-[#7fb069]' 
                       : log.includes('hunted') 
-                      ? 'text-amber-400' 
-                      : 'text-slate-300'
+                      ? 'text-[#d4a574]' 
+                      : 'text-[#c9b88d]'
                   }`}
                 >
-                  <span className="text-slate-500 font-semibold mr-1.5">[{tick}]</span>
+                  <span className="text-[#a0714f] font-semibold mr-2">[{tick}]</span>
                   {log}
                 </div>
               ))

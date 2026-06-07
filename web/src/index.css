@@ -1,40 +1,98 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Orbitron:wght@400;700;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
 :root {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  background-color: #0b0f19;
-  color: #f3f4f6;
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  background-color: #1a1a1a;
+  color: #e8e8e8;
   color-scheme: dark;
 }
 
 body {
   margin: 0;
   overflow: hidden;
+  background: linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 100%);
 }
 
-/* Glassmorphism custom panel styles */
+/* Voxel Panel Styles */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #2a2a2a;
+  border: 3px solid #7fb069;
+  box-shadow: 
+    inset 0 0 0 1px #a0714f,
+    0 0 20px rgba(127, 176, 105, 0.2),
+    0 8px 0 #5a5a5a;
+  image-rendering: pixelated;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  background: linear-gradient(135deg, #7fb069 0%, #a0714f 100%);
+  opacity: 0.08;
+  pointer-events: none;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: #1a1a1a;
+  border: 2px solid #7fb069;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: #a0714f;
+  border: 2px solid #7fb069;
+  image-rendering: pixelated;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #c9b88d;
+}
+
+/* Voxel Button Styles */
+.voxel-btn {
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  padding: 10px 18px;
+  border: 3px solid;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  transition: all 0.1s;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  transform: translateZ(0);
+  background: #2a2a2a;
+  font-weight: bold;
+}
+
+.voxel-btn:hover {
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  transform: translate(2px, 2px);
+}
+
+.voxel-btn:active {
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+  transform: translate(4px, 4px);
+}
+
+/* Pixel-perfect text */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Press Start 2P', cursive;
+  letter-spacing: 2px;
+  image-rendering: pixelated;
+  color: #7fb069;
+}
+
+/* Voxel borders */
+.voxel-border {
+  border: 2px solid #7fb069;
+  box-shadow: 
+    inset 0 0 0 1px #a0714f,
+    3px 3px 0 rgba(127, 176, 105, 0.2);
 }
