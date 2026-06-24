@@ -74,6 +74,11 @@ Thumbs.db
 .AppleDouble
 .LSOverride
 
+# Junie CLI / AI agents
+.junie/
+.agents/
+skills-lock.json
+
 # Testing
 .coverage
 .pytest_cache/

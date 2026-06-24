@@ -343,7 +343,7 @@ const App: React.FC = () => {
             {/* Cool sky fill from opposite side */}
             <directionalLight position={[-10, 15, -15]} intensity={0.45} color="#b0d4ff" />
             {/* Soft ambient so shadows aren't pitch black */}
-            <ambientLight intensity={0.55} color="#dde8ff" />
+            <ambientLight intensity={1.2} color="#ffffff" />
             {/* Atmospheric depth */}
             <fog attach="fog" args={['#131b2e', 35, 70]} />
             <SimulationCanvas />

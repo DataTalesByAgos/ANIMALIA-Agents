@@ -28,3 +28,11 @@ Build and run the stack using Docker Compose:
 ```bash
 docker-compose up --build
 ```
+
+## Credits & Licenses
+
+### 3D Assets
+- **Cube Pets** by [Kenney](https://www.kenney.nl) — [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+- **Ultimate Platformer Pack** (nature assets) by [@Quaternius](https://quaternius.com) — [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+
+Both packs are public domain. No attribution required, but appreciated.

@@ -1,71 +1,132 @@
-import React, { useRef, useEffect, useMemo } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import React, { useRef, useEffect, useMemo, Suspense } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useFBX, useTexture, useAnimations } from '@react-three/drei';
 import { useStore } from './store';
 import * as THREE from 'three';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-// Tile top-surface Y formula (matches world.py elevation values):
-//   Tile box center = elevation/2 - 0.5
-//   Tile box height = elevation
-//   → top surface  = (elevation/2 - 0.5) + elevation/2 = elevation - 0.5
-const tileTopY = (elevation: number) => Math.max(0, elevation - 0.5);
+// ─── Nature decoration config per biome ───────────────────────────────────────
+// Each entry: [fbxFile, textureFile, scale, yOffset]
+type DecoEntry = { fbx: string; tex: string; scale: number; yOff: number };
 
-// Animal model sits so that the bottom of its legs touch the tile surface.
-// Leg bottom = groupY - 0.35 - 0.15 (leg half-height) = groupY - 0.5
-// So groupY = tileTopY + 0.5 → the animal group Y
-const animalGroundY = (elevation: number) => tileTopY(elevation) + 0.5;
+const BIOME_DECO: Record<string, DecoEntry[]> = {
+  forest: [
+    { fbx: '/models/PineTree_1.fbx',    tex: '/textures/PineTree_Leaves.png',   scale: 0.008, yOff: 0 },
+    { fbx: '/models/PineTree_2.fbx',    tex: '/textures/PineTree_Leaves.png',   scale: 0.008, yOff: 0 },
+    { fbx: '/models/NormalTree_1.fbx',  tex: '/textures/NormalTree_Leaves.png', scale: 0.008, yOff: 0 },
+    { fbx: '/models/NormalTree_3.fbx',  tex: '/textures/NormalTree_Leaves.png', scale: 0.008, yOff: 0 },
+    { fbx: '/models/Bush.fbx',          tex: '/textures/Bush_Leaves.png',       scale: 0.009, yOff: 0 },
+    { fbx: '/models/Bush_Large.fbx',    tex: '/textures/Bush_Leaves.png',       scale: 0.009, yOff: 0 },
+  ],
+  grassland: [
+    { fbx: '/models/Grass_Large.fbx',       tex: '/textures/Grass.png',    scale: 0.009, yOff: 0 },
+    { fbx: '/models/Grass_Small.fbx',       tex: '/textures/Grass.png',    scale: 0.009, yOff: 0 },
+    { fbx: '/models/Flower_1_Clump.fbx',    tex: '/textures/Flowers.png',  scale: 0.009, yOff: 0 },
+    { fbx: '/models/Flower_2_Clump.fbx',    tex: '/textures/Flowers.png',  scale: 0.009, yOff: 0 },
+    { fbx: '/models/Bush_Small.fbx',        tex: '/textures/Bush_Leaves.png', scale: 0.009, yOff: 0 },
+    { fbx: '/models/Bush_Small_Flowers.fbx',tex: '/textures/Bush_Leaves.png', scale: 0.009, yOff: 0 },
+  ],
+  mountain: [
+    { fbx: '/models/Rock_1.fbx',      tex: '/textures/Rocks.png',  scale: 0.009, yOff: 0 },
+    { fbx: '/models/Rock_2.fbx',      tex: '/textures/Rocks.png',  scale: 0.009, yOff: 0 },
+    { fbx: '/models/Rock_3.fbx',      tex: '/textures/Rocks.png',  scale: 0.009, yOff: 0 },
+    { fbx: '/models/DeadTree_1.fbx',  tex: '/textures/Rocks.png',  scale: 0.008, yOff: 0 },
+    { fbx: '/models/DeadTree_3.fbx',  tex: '/textures/Rocks.png',  scale: 0.008, yOff: 0 },
+  ],
+};
 
-// ─── State Aura (floating effect above animal head) ───────────────────────────
-const StateAura: React.FC<{ action: string }> = ({ action }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const matRef  = useRef<THREE.MeshStandardMaterial>(null);
+// Simple deterministic pseudo-random from two integers
+function seededRand(x: number, y: number, salt: number): number {
+  const n = Math.sin(x * 127.1 + y * 311.7 + salt * 74.3) * 43758.5453;
+  return n - Math.floor(n);
+}
 
-  // Map action text to color + shape
-  let color     = '#94a3b8';
-  let emissive  = '#334155';
-  let scale     = 0.0;   // 0 = hidden
-  let yOffset   = 0.95;
+// ─── Single nature decoration piece ──────────────────────────────────────────
+const NaturePiece: React.FC<{
+  entry: DecoEntry;
+  position: [number, number, number];
+  rotY: number;
+}> = ({ entry, position, rotY }) => {
+  const fbx = useFBX(entry.fbx);
+  const tex = useTexture(entry.tex);
 
-  if (action.includes('foraging') || action.includes('eating food')) {
-    color = '#4ade80'; emissive = '#166534'; scale = 1.0;
-  } else if (action.includes('water') || action.includes('eating water')) {
-    color = '#38bdf8'; emissive = '#0c4a6e'; scale = 1.0;
-  } else if (action.includes('flee') || action.includes('escaping')) {
-    color = '#f97316'; emissive = '#7c2d12'; scale = 1.2;
-  } else if (action.includes('hunting')) {
-    color = '#ef4444'; emissive = '#7f1d1d'; scale = 1.1;
-  } else if (action.includes('repro') || action.includes('mate')) {
-    color = '#e879f9'; emissive = '#701a75'; scale = 1.0;
-  } else if (action.includes('resting')) {
-    color = '#a3e635'; emissive = '#3f6212'; scale = 0.8;
-  }
-
-  useFrame((state) => {
-    if (!meshRef.current || !matRef.current || scale === 0) return;
-    const t = state.clock.elapsedTime;
-    // Float up and down, pulse opacity
-    meshRef.current.position.y = yOffset + Math.sin(t * 3.0) * 0.06;
-    meshRef.current.scale.setScalar(scale * (0.85 + Math.sin(t * 4.0) * 0.15));
-    matRef.current.emissiveIntensity = 0.6 + Math.sin(t * 5.0) * 0.3;
-    matRef.current.opacity = scale > 0 ? 0.85 : 0;
-  });
-
-  if (scale === 0) return null;
+  const cloned = useMemo(() => {
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const clone = fbx.clone(true);
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        // Preserve original material but inject the correct texture
+        const orig = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        const mat = (orig as THREE.MeshStandardMaterial).clone();
+        mat.map = tex;
+        mat.needsUpdate = true;
+        mesh.material = mat;
+      }
+    });
+    return clone;
+  }, [fbx, tex]);
 
   return (
-    <mesh ref={meshRef} position={[0, yOffset, 0]}>
-      <sphereGeometry args={[0.12, 8, 8]} />
-      <meshStandardMaterial
-        ref={matRef}
-        color={color}
-        emissive={emissive}
-        emissiveIntensity={0.8}
-        transparent
-        opacity={0.85}
-      />
-    </mesh>
+    <primitive
+      object={cloned}
+      position={position}
+      rotation={[0, rotY, 0]}
+      scale={[entry.scale, entry.scale, entry.scale]}
+    />
   );
 };
+
+// ─── Decoration layer for a biome group of tiles ──────────────────────────────
+// Renders ~30% of tiles with one decoration piece each (deterministic)
+const BiomeDecoration: React.FC<{
+  biome: string;
+  tiles: Array<{ x: number; y: number; elevation: number }>;
+}> = ({ biome, tiles }) => {
+  const entries = BIOME_DECO[biome];
+  if (!entries) return null;
+
+  const decorations = useMemo(() => {
+    const result: Array<{ entry: DecoEntry; pos: [number, number, number]; rotY: number; key: string }> = [];
+    for (const tile of tiles) {
+      // ~8% chance per tile — keep density low
+      if (seededRand(tile.x, tile.y, 0) > 0.08) continue;
+      // Pick which decoration
+      const idx = Math.floor(seededRand(tile.x, tile.y, 1) * entries.length);
+      const entry = entries[idx];
+      // Small random offset within tile so it doesn't always center
+      const ox = (seededRand(tile.x, tile.y, 2) - 0.5) * 0.5;
+      const oz = (seededRand(tile.x, tile.y, 3) - 0.5) * 0.5;
+      const rotY = seededRand(tile.x, tile.y, 4) * Math.PI * 2;
+      result.push({
+        entry,
+        pos: [tile.x + ox, GROUND_Y + entry.yOff, tile.y + oz],
+        rotY,
+        key: `${tile.x}-${tile.y}`,
+      });
+    }
+    return result;
+  }, [tiles, entries]);
+
+  return (
+    <>
+      {decorations.map(({ entry, pos, rotY, key }) => (
+        <Suspense key={key} fallback={null}>
+          <NaturePiece entry={entry} position={pos} rotY={rotY} />
+        </Suspense>
+      ))}
+    </>
+  );
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+// Flat ground — all animals and decorations sit at Y = 0
+const GROUND_Y = 0;
+const tileTopY = (_elevation: number) => GROUND_Y;
+const animalGroundY = (_elevation: number) => GROUND_Y;
 
 // ─── Selection Ring ────────────────────────────────────────────────────────────
 const SelectionRing: React.FC = () => {
@@ -86,18 +147,105 @@ const SelectionRing: React.FC = () => {
   );
 };
 
-// ─── Leg mesh (ref-animated) ──────────────────────────────────────────────────
-const AnimatedLeg: React.FC<{
-  position: [number, number, number];
-  color: string;
-  phaseOffset: number;
-  legRef: React.RefObject<THREE.Mesh | null>;
-}> = ({ position, color, legRef }) => (
-  <mesh ref={legRef} position={position} castShadow>
-    <boxGeometry args={[0.1, 0.28, 0.1]} />
-    <meshStandardMaterial color={color} roughness={0.7} />
-  </mesh>
-);
+// Maps agent action strings to animation name patterns
+function resolveAnimName(action: string, moving: boolean, names: string[]): string | undefined {
+  const find = (patterns: RegExp[]) =>
+    names.find(n => patterns.some(p => p.test(n)));
+
+  if (action.includes('flee') || action.includes('escaping')) {
+    return find([/run/i, /walk/i]) ?? names[0];
+  }
+  if (action.includes('hunting') || action.includes('attack')) {
+    return find([/attack/i, /run/i, /walk/i]) ?? names[0];
+  }
+  if (action.includes('foraging') || action.includes('eating food') || action.includes('eating water')) {
+    return find([/eat/i, /idle/i]) ?? names[0];
+  }
+  if (action.includes('resting') || action.includes('sleeping')) {
+    return find([/idle/i, /sleep/i]) ?? names[0];
+  }
+  if (action.includes('repro') || action.includes('mate')) {
+    return find([/idle/i]) ?? names[0];
+  }
+  // Default: walk if moving, idle otherwise
+  if (moving) return find([/walk/i, /run/i]) ?? names[0];
+  return find([/idle/i]) ?? names[0];
+}
+
+// ─── FBX Animal Model with animations ────────────────────────────────────────
+const FBXModel: React.FC<{
+  path: string;
+  isSelected: boolean;
+  moving: React.MutableRefObject<boolean>;
+  currentAction: string;
+}> = ({ path, isSelected, moving, currentAction }) => {
+  const fbxSource = useFBX(path);
+  const colormap = useTexture('/textures/colormap.png');
+
+  // skeletonClone duplicates the scene graph and re-binds all SkinnedMesh bones.
+  // We also clone each AnimationClip so the mixer targets the cloned skeleton tracks.
+  const { cloned, clips } = useMemo(() => {
+    const c = skeletonClone(fbxSource) as THREE.Group;
+    const cl = fbxSource.animations.map(a => a.clone());
+    return { cloned: c, clips: cl };
+  }, [fbxSource]);
+
+  // Apply colormap to cloned materials
+  useEffect(() => {
+    colormap.flipY = false;
+    colormap.colorSpace = THREE.SRGBColorSpace;
+    cloned.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        mesh.castShadow = true;
+        // FBX uses MeshPhongMaterial — create a fresh MeshStandardMaterial instead of cloning
+        const mat = new THREE.MeshStandardMaterial({
+          map: colormap,
+          color: new THREE.Color('#ffffff'),
+          emissive: new THREE.Color(isSelected ? '#0369a1' : '#000000'),
+          emissiveIntensity: isSelected ? 0.4 : 0,
+          roughness: 0.8,
+          metalness: 0.0,
+        });
+        mesh.material = mat;
+      }
+    });
+  }, [cloned, colormap, isSelected]);
+
+  // useAnimations from drei: pass cloned clips + cloned scene root ref
+  const groupRef = useRef<THREE.Group>(null);
+  const { actions, names } = useAnimations(clips, groupRef);
+
+  const lastAnim = useRef<string | undefined>(undefined);
+
+  // Start initial animation once actions are ready
+  useEffect(() => {
+    if (!names.length) return;
+    const desired = resolveAnimName(currentAction, moving.current, names);
+    const chosen = desired ?? names[0];
+    if (chosen && actions[chosen]) {
+      actions[chosen]!.reset().fadeIn(0.2).play();
+      lastAnim.current = chosen;
+    }
+  }, [actions, names]);
+
+  // Update animation every frame based on current action
+  useFrame(() => {
+    if (!names.length) return;
+    const desired = resolveAnimName(currentAction, moving.current, names);
+    if (desired && desired !== lastAnim.current && actions[desired]) {
+      Object.values(actions).forEach(a => a?.fadeOut(0.3));
+      actions[desired]!.reset().fadeIn(0.3).play();
+      lastAnim.current = desired;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <primitive object={cloned} />
+    </group>
+  );
+};
 
 // ─── Single Animal ────────────────────────────────────────────────────────────
 const AnimalAgent: React.FC<{
@@ -107,20 +255,11 @@ const AnimalAgent: React.FC<{
   onClick: () => void;
 }> = ({ agent, isSelected, groundY, onClick }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const bodyRef  = useRef<THREE.Mesh>(null);
+  const modelRef = useRef<THREE.Group>(null);
 
-  // Four leg refs for walk cycle
-  const legFL = useRef<THREE.Mesh>(null);
-  const legFR = useRef<THREE.Mesh>(null);
-  const legBL = useRef<THREE.Mesh>(null);
-  const legBR = useRef<THREE.Mesh>(null);
-
-  // Target position tracked via ref (avoids re-renders)
   const target = useRef({ x: agent.x, z: agent.y, y: groundY });
-  const prev   = useRef({ x: agent.x, z: agent.y });
-  const moving = useRef(false);
+  const moving  = useRef(false);
 
-  // Calculate age group and size scaling
   const getAgeGroup = (age: number) => {
     if (age < 50) return "young";
     if (age < 170) return "adult";
@@ -128,14 +267,19 @@ const AnimalAgent: React.FC<{
   };
 
   const getScaleFactor = (age: number) => {
-    const ageGroup = getAgeGroup(age);
-    if (ageGroup === "young") return 0.65;     // 65% size
-    if (ageGroup === "adult") return 1.0;      // 100% size
-    return 0.95;                                // 95% size (slight shrink in old age)
+    const ag = getAgeGroup(age);
+    if (ag === "young") return 0.0045;
+    if (ag === "adult") return 0.007;
+    return 0.0065;
   };
 
   const scaleFactor = getScaleFactor(agent.age ?? 0);
   const ageGroup = getAgeGroup(agent.age ?? 0);
+
+  // FBX models from Kenney are in centimeters, scale ~0.007 brings them to ~1 unit
+  const modelPath = agent.species_id === 'predator'
+    ? '/models/animal-fox.fbx'
+    : '/models/animal-deer.fbx';
 
   useEffect(() => {
     target.current.x = agent.x;
@@ -146,12 +290,10 @@ const AnimalAgent: React.FC<{
   useFrame((state, delta) => {
     if (!groupRef.current) return;
     const t = state.clock.elapsedTime;
+    const lf = 1 - Math.pow(0.01, delta);
 
-    // ── Position lerp ──────────────────────────────────────────────
-    const lf = 1 - Math.pow(0.01, delta);  // smooth expo lerp
     const px = groupRef.current.position.x;
     const pz = groupRef.current.position.z;
-
     const dx = target.current.x - px;
     const dz = target.current.z - pz;
     const dist = Math.sqrt(dx * dx + dz * dz);
@@ -160,254 +302,139 @@ const AnimalAgent: React.FC<{
 
     groupRef.current.position.x += dx * lf;
     groupRef.current.position.z += dz * lf;
-
-    // ── Ground Y lerp (terrain height) ─────────────────────────────
     groupRef.current.position.y += (target.current.y - groupRef.current.position.y) * lf;
 
-    // ── Rotation: face movement direction (smoother) ────────────────
+    // Face movement direction
     if (moving.current) {
       const angle = Math.atan2(dx, dz);
-      let rot = groupRef.current.rotation.y;
-      let diff = angle - rot;
+      let diff = angle - groupRef.current.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      groupRef.current.rotation.y += diff * 0.12;  // Slower, smoother rotation
+      groupRef.current.rotation.y += diff * 0.12;
     }
 
-    // ── Body bounce (hop when moving, gentle sway when idle) ──────────────────────────
-    if (bodyRef.current) {
+    // Subtle body bob on the model group
+    if (modelRef.current) {
       const walkSpeed = agent.species_id === 'predator' ? 8.0 : 6.0;
       if (moving.current) {
-        // Smoother hop: use abs-sine but with more natural transition
-        const hop = Math.abs(Math.sin(t * walkSpeed)) * 0.08;
-        bodyRef.current.position.y = hop;
+        modelRef.current.position.y = Math.abs(Math.sin(t * walkSpeed)) * 0.05;
       } else {
-        // Idle: gentle breath sway with longer cycle
-        const breathSway = Math.sin(t * 1.3) * 0.02;
-        bodyRef.current.position.y = breathSway;
+        modelRef.current.position.y = Math.sin(t * 1.3) * 0.015;
       }
     }
-
-    // ── Leg walk cycle (alternate front/back pairs, smoother) ─────────────────
-    const walkSpeed = agent.species_id === 'predator' ? 8.0 : 6.0;
-    // Smoother leg swing with less exaggeration
-    const legSwing = moving.current ? Math.sin(t * walkSpeed) * 0.12 : 0;
-
-    if (legFL.current) legFL.current.rotation.x =  legSwing;
-    if (legBR.current) legBR.current.rotation.x =  legSwing;
-    if (legFR.current) legFR.current.rotation.x = -legSwing;
-    if (legBL.current) legBL.current.rotation.x = -legSwing;
-
-    // ── Gender-based tail wag (wolves only) ────────────────────────────────
-    // Females: more energetic tail wagging
-    // Males: slower, more deliberate tail movement
   });
 
-  const color     = isSelected ? '#38bdf8' : agent.color;
-  const bodyColor = isSelected ? '#7dd3fc' : agent.color;
-
-  const legColor = agent.species_id === 'predator'
-    ? (isSelected ? '#93c5fd' : '#b91c1c')
-    : (isSelected ? '#6ee7b7' : '#047857');
-
-  // Gender-based visual modifiers
-  const isMale = agent.gender === 'male';
-  
-  // Male animals: slightly larger horns/mane, darker color
-  // Female animals: smaller horns, brighter color
-  const genderColorMod = isMale ? 0.85 : 1.0;  // Males slightly darker
-  const hornScale = isMale ? 1.3 : 0.8;       // Males have larger features
-  const maneSize = isMale && agent.species_id === 'predator' ? 0.15 : 0.0;
-
-  // Age-specific body color changes
-  let ageColorMod = 1.0;
-  if (ageGroup === "young") {
-    ageColorMod = 1.15;  // Brighter/younger looking
-  } else if (ageGroup === "old") {
-    ageColorMod = 0.9;   // Slightly grayer/older
-  }
+  const color = isSelected ? '#7dd3fc' : agent.color;
 
   return (
     <group
       ref={groupRef}
       position={[agent.x, groundY, agent.y]}
-      scale={[scaleFactor, scaleFactor, scaleFactor]}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       {/* ── Selection ring ── */}
       {isSelected && <SelectionRing />}
 
-      {/* ── State aura (floating colored orb) ── */}
-      <StateAura action={agent.current_action ?? ''} />
-
-      {/* ── Age group indicator (subtle glow) ── */}
-      {ageGroup === "old" && (
-        <mesh position={[0, -0.6, 0]}>
-          <sphereGeometry args={[0.7, 12, 12]} />
-          <meshStandardMaterial
-            color="#94a3b8"
-            transparent
-            opacity={0.15}
-            side={THREE.BackSide}
-          />
+      {/* ── FBX model container ── */}
+      <Suspense fallback={
+        <mesh>
+          <boxGeometry args={[0.5, 0.5, 0.5]} />
+          <meshStandardMaterial color={agent.species_id === 'predator' ? 'orange' : 'cyan'} />
         </mesh>
-      )}
-
-      {/* ── Body (ref for hop animation) ── */}
-      <mesh ref={bodyRef} castShadow>
-        <boxGeometry args={[0.48, 0.42, 0.68]} />
-        <meshStandardMaterial
-          color={color}
-          roughness={0.55}
-          emissive={isSelected ? '#0369a1' : '#000'}
-          emissiveIntensity={isSelected ? 0.6 : 0}
-        />
-      </mesh>
-
-      {/* ── Head ── */}
-      <mesh position={[0, 0.26, 0.36]} castShadow>
-        <boxGeometry args={[0.3, 0.28, 0.3]} />
-        <meshStandardMaterial color={bodyColor} roughness={0.55} />
-      </mesh>
-
-      {/* ── Species-specific details ── */}
-      {agent.species_id === 'herbivore' ? (
-        // Deer: antlers differ by gender
-        <group position={[0, 0.42, 0.36]}>
-          {/* Left antler */}
-          <mesh position={[-0.1, 0.12 * hornScale, 0]}>
-            <boxGeometry args={[0.05, 0.22 * hornScale, 0.05]} />
-            <meshStandardMaterial color="#d2b48c" roughness={0.9} />
-          </mesh>
-          {/* Right antler */}
-          <mesh position={[0.1, 0.12 * hornScale, 0]}>
-            <boxGeometry args={[0.05, 0.22 * hornScale, 0.05]} />
-            <meshStandardMaterial color="#d2b48c" roughness={0.9} />
-          </mesh>
-          {/* Gender indicator for females: white spot on forehead */}
-          {!isMale && (
-            <mesh position={[0, 0.05, 0.12]}>
-              <sphereGeometry args={[0.08, 8, 8]} />
-              <meshStandardMaterial color="#f5f5f5" roughness={0.4} />
-            </mesh>
-          )}
-          {/* Nose dot */}
-          <mesh position={[0, -0.27, 0.16]}>
-            <boxGeometry args={[0.08, 0.07, 0.07]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
+      }>
+        <group ref={modelRef} scale={[scaleFactor, scaleFactor, scaleFactor]}>
+          <FBXModel path={modelPath} isSelected={isSelected} moving={moving} currentAction={agent.current_action ?? ''} />
         </group>
-      ) : (
-        // Wolf: snout + pointed ears + mane for males
-        <group>
-          {/* Snout */}
-          <mesh position={[0, 0.21, 0.51]} castShadow>
-            <boxGeometry args={[0.15, 0.13, 0.18]} />
-            <meshStandardMaterial color="#1e293b" />
-          </mesh>
-          {/* Left ear */}
-          <mesh position={[-0.11, 0.43, 0.31]}>
-            <boxGeometry args={[0.07, 0.14, 0.07]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          {/* Right ear */}
-          <mesh position={[0.11, 0.43, 0.31]}>
-            <boxGeometry args={[0.07, 0.14, 0.07]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          {/* Mane for males (neck ridge) */}
-          {isMale && maneSize > 0 && (
-            <mesh position={[0, 0.35, 0.15]} castShadow>
-              <boxGeometry args={[0.6, 0.2 * maneSize, 0.4]} />
-              <meshStandardMaterial color="#7c2d12" roughness={0.8} />
-            </mesh>
-          )}
-          {/* Tail */}
-          <mesh position={[0, 0.1, -0.45]} rotation={[0.4, 0, 0]}>
-            <boxGeometry args={[0.08, 0.08, 0.28]} />
-            <meshStandardMaterial color={color} roughness={0.8} />
-          </mesh>
-          {/* Female marking: white chest patch */}
-          {!isMale && (
-            <mesh position={[0, 0.05, 0.35]}>
-              <boxGeometry args={[0.25, 0.15, 0.15]} />
-              <meshStandardMaterial color="#f5f5f5" roughness={0.6} />
-            </mesh>
-          )}
-        </group>
-      )}
-
-      {/* ── 4 animated legs ── */}
-      <AnimatedLeg position={[-0.17, -0.34, 0.22]}  color={legColor} phaseOffset={0}   legRef={legFL} />
-      <AnimatedLeg position={[ 0.17, -0.34, 0.22]}  color={legColor} phaseOffset={Math.PI} legRef={legFR} />
-      <AnimatedLeg position={[-0.17, -0.34, -0.22]} color={legColor} phaseOffset={Math.PI} legRef={legBL} />
-      <AnimatedLeg position={[ 0.17, -0.34, -0.22]} color={legColor} phaseOffset={0}   legRef={legBR} />
-
-      {/* ── Age group label (text above head) ── */}
-      {isSelected && (
-        <group position={[0, 0.8, 0]}>
-          <mesh scale={[0.001, 0.001, 0.001]}>
-            <planeGeometry args={[200, 100]} />
-            <meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} />
-          </mesh>
-        </group>
-      )}
+      </Suspense>
     </group>
   );
 };
 
-// ─── Animated resource bubble (float up/down) ─────────────────────────────────
-const ResourceBubble: React.FC<{ res: any; tileY: number }> = ({ res, tileY }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const baseY = tileY + 0.3;
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.y = baseY + Math.sin(state.clock.elapsedTime * 2.2 + res.x) * 0.06;
-      meshRef.current.rotation.y = state.clock.elapsedTime * 0.8;
-    }
-  });
+// ─── Resource: food = Grass_Large FBX model, water = hidden ──────────────────
+const FoodResource: React.FC<{ res: any; tileY: number }> = ({ res, tileY }) => {
+  const fbx = useFBX('/models/Grass_Large.fbx');
+  const tex = useTexture('/textures/Grass.png');
+  const groupRef = useRef<THREE.Group>(null);
 
-  const isFood = res.type === 'food';
-  // Fade out resources that are nearly depleted
-  const opacity = Math.min(1, res.amount / 40);
+  const cloned = useMemo(() => {
+    tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const clone = fbx.clone(true);
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const orig = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        const mat = (orig as THREE.MeshStandardMaterial).clone();
+        mat.map = tex;
+        mat.transparent = true;
+        mat.opacity = Math.max(0.4, Math.min(1, res.amount / 40));
+        mat.needsUpdate = true;
+        mesh.material = mat;
+      }
+    });
+    return clone;
+  }, [fbx, tex]);
 
   return (
-    <mesh ref={meshRef} position={[res.x, baseY, res.y]} castShadow>
-      <sphereGeometry args={[0.16, 8, 8]} />
-      <meshStandardMaterial
-        color={isFood ? '#86efac' : '#7dd3fc'}
-        emissive={isFood ? '#166534' : '#0c4a6e'}
-        emissiveIntensity={0.7}
-        transparent
-        opacity={opacity}
-      />
-    </mesh>
+    <group ref={groupRef} position={[res.x, tileY, res.y]}>
+      <primitive object={cloned} scale={[0.007, 0.007, 0.007]} />
+    </group>
+  );
+};
+
+const ResourceBubble: React.FC<{ res: any; tileY: number }> = ({ res, tileY }) => {
+  if (res.type === 'food') {
+    return (
+      <Suspense fallback={null}>
+        <FoodResource res={res} tileY={tileY} />
+      </Suspense>
+    );
+  }
+  // Water resources are not rendered visually
+  return null;
+};
+
+// ─── Flat biome floor (single plane per biome color zone) ────────────────────
+// Instead of voxel boxes with varying elevation, we render flat 1x1 planes
+// so animals always sit at Y=0 without any clipping issues.
+const FlatBiomeTiles: React.FC<{ tiles: Array<any>; biome: string }> = ({ tiles, biome }) => {
+  const biomeColors: Record<string, string> = {
+    water:     '#1e3a8a',
+    grassland: '#3a7d44',
+    forest:    '#1a4a2e',
+    mountain:  '#6b7280',
+  };
+  const color = biomeColors[biome] ?? '#3a7d44';
+  return (
+    <>
+      {tiles.map(tile => (
+        <mesh key={`${tile.x}-${tile.y}`} position={[tile.x, -0.05, tile.y]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[0.98, 0.98]} />
+          <meshStandardMaterial color={color} roughness={biome === 'mountain' ? 0.9 : 0.75} metalness={biome === 'mountain' ? 0.3 : 0} />
+        </mesh>
+      ))}
+    </>
+  );
+};
+
+const GrassFloorTiles: React.FC<{ tiles: Array<any> }> = ({ tiles }) => {
+  const tex = useTexture('/textures/Grass.png');
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return (
+    <>
+      {tiles.map(tile => (
+        <mesh key={`${tile.x}-${tile.y}`} position={[tile.x, -0.05, tile.y]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[0.98, 0.98]} />
+          <meshStandardMaterial map={tex} roughness={0.85} />
+        </mesh>
+      ))}
+    </>
   );
 };
 
 // ─── Main Scene ───────────────────────────────────────────────────────────────
 export const SimulationCanvas: React.FC = () => {
   const { worldTiles, agents, resources, selectedAgentId, selectAgent } = useStore();
-
-  // Build an O(1) lookup: "x,y" → tileTopY
-  const elevationMap = useMemo(() => {
-    const map = new Map<string, number>();
-    worldTiles.forEach(tile => {
-      map.set(`${Math.round(tile.x)},${Math.round(tile.y)}`, tile.elevation);
-    });
-    return map;
-  }, [worldTiles]);
-
-  const getGroundY = (ax: number, ay: number): number => {
-    const key = `${Math.round(ax)},${Math.round(ay)}`;
-    const elev = elevationMap.get(key) ?? 0.8;   // default to grassland if unknown
-    return animalGroundY(elev);
-  };
-
-  const getResourceY = (rx: number, ry: number): number => {
-    const key = `${Math.round(rx)},${Math.round(ry)}`;
-    const elev = elevationMap.get(key) ?? 0.8;
-    return tileTopY(elev);
-  };
 
   // Group tiles by biome for batch rendering
   const biomeGroups = useMemo(() => {
@@ -420,38 +447,26 @@ export const SimulationCanvas: React.FC = () => {
     return map;
   }, [worldTiles]);
 
-  const biomeColors: Record<string, string> = {
-    water:     '#1e3a8a',
-    grassland: '#14532d',
-    forest:    '#052e16',
-    mountain:  '#374151',
-  };
 
-  const biomeMetal: Record<string, number> = {
-    water: 0.1, grassland: 0.0, forest: 0.0, mountain: 0.3,
-  };
 
   return (
     <group position={[-15, 0, -15]}>
 
-      {/* ── Biome floor tiles ── */}
+      {/* ── Biome floor tiles (flat planes, no elevation) ── */}
+      {Object.entries(biomeGroups).map(([biome, tiles]) => {
+        if (biome === 'grassland' || biome === 'forest') {
+          return (
+            <Suspense key={biome} fallback={<FlatBiomeTiles tiles={tiles} biome={biome} />}>
+              <GrassFloorTiles tiles={tiles} />
+            </Suspense>
+          );
+        }
+        return <FlatBiomeTiles key={biome} tiles={tiles} biome={biome} />;
+      })}
+
+      {/* ── Nature decoration (trees, rocks, bushes) ── */}
       {Object.entries(biomeGroups).map(([biome, tiles]) => (
-        <group key={biome}>
-          {tiles.map(tile => (
-            <mesh
-              key={`${tile.x}-${tile.y}`}
-              position={[tile.x, tile.elevation / 2 - 0.5, tile.y]}
-              receiveShadow
-            >
-              <boxGeometry args={[0.96, tile.elevation || 0.1, 0.96]} />
-              <meshStandardMaterial
-                color={biomeColors[biome]}
-                roughness={biome === 'mountain' ? 0.9 : 0.75}
-                metalness={biomeMetal[biome] ?? 0}
-              />
-            </mesh>
-          ))}
-        </group>
+        <BiomeDecoration key={`deco-${biome}`} biome={biome} tiles={tiles} />
       ))}
 
       {/* ── Resource floating bubbles ── */}
@@ -459,17 +474,23 @@ export const SimulationCanvas: React.FC = () => {
         <ResourceBubble
           key={`r-${idx}-${res.x}-${res.y}`}
           res={res}
-          tileY={getResourceY(res.x, res.y)}
+          tileY={GROUND_Y}
         />
       ))}
 
       {/* ── Animals ── */}
+      {agents.length === 0 && (
+        <mesh position={[15, 1, 15]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="red" />
+        </mesh>
+      )}
       {agents.map(agent => (
         <AnimalAgent
           key={agent.id}
           agent={agent}
           isSelected={agent.id === selectedAgentId}
-          groundY={getGroundY(agent.x, agent.y)}
+          groundY={GROUND_Y}
           onClick={() => selectAgent(agent.id)}
         />
       ))}
